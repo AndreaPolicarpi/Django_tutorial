@@ -1,0 +1,544 @@
+################################################################################################
+################################################################################################
+################################################################################################
+
+                            <---  DJANGO TUTORIAL NOTES --->
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# STEPS PRELIMINARI
+
+- creare un nuovo conda environment || conda create --name django_env python=3.8.2 -y
+- installare django || pip install django
+- creare la directory che conterrà il codice
+
+# CREARE UN PROGETTO DJANGO
+
+- creare il progetto || django-admin startproject mysite
+- avviare il server di sviluppo || cd mysite | python manage.py runserver
+
+# CREARE UN'APP
+
+- creare l'app nella stessa cartella di manage.py || python manage.py startapp polls
+
+# SCRIVERE UNA VISTA
+
+- scrivere la vista dentro polls/views.py || [--python code--]
+- per fare una chiamata alla vista, va mappata in URL:
+    - creare un file urls.py dentro polls/
+    - dentro urls.py mettere il codice per l'url || [--python code--]
+- puntare l'URLconf principale al modulo polls.urls
+    - in mysite/urls.py scrivere il codice corrispondente || [--python code--]
+-verificare che funzioni || python manage.py runserver + andare all'indirizzo http://localhost:8000/polls/
+
+NB: mysite/urls.py si occupa di linkare le url verso le app, poi i vari percorsi interni alle app sono gestiti dalle singole cartelle di app. Ad esempio:
+
+                                        urlpatterns = [
+                                            path('', views.pazzesca, name='pazzesca'),
+                                            path('luna/', views.luna, name='luna'),
+                                        ] 
+
+determina che il percorso http://localhost:8000/pazzesca/ porta alla view pazzesca, metre il percorso http://localhost:8000/pazzesca/luna/ porta alla view luna. Per entrambi,
+è sufficente inserire il solo path('pazzesca/', include('pazzesca.urls')):
+
+                                        urlpatterns = [
+                                            path('pazzesca/', include('pazzesca.urls')),
+                                            path('polls/', include('polls.urls')),
+                                            path('admin/', admin.site.urls),
+                                        ]
+nel file mysite/urls.py per gestire entrambi i path dell'app.
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# CONFIGURARE IL DATABASE
+
+- configurare il file mysite/settings.py (modulo che rappresenta le impostazioni di Django)
+- settare la TIME_ZONE corrispondente al fuso orario corretto || 'Europe/Rome'
+
+Di base, Django usa SQLite. Per usare un altro database:
+- installare l’appropriato database bindings || https://docs.djangoproject.com/it/4.0/topics/install/#database-installation
+- in mysite/settings.py, modificare alcune chiavi sulla chiave 'default' del dizionario DATABASES:
+    - ENGINE --> ”django.db.backends.sqlite3”, 'django.db.backends.postgresql', 'django.db.backends.mysql' o simili (in base al db scelto)
+    - NAME --> nome del tuo database (di base: BASE_DIR / 'db.sqlite3')
+    - Se non si usa SQLite come database, andranno aggiunte impostazioni come USER, PASSWORD, e HOST || https://docs.djangoproject.com/it/4.0/ref/settings/#std:setting-DATABASES
+Notare la voce INSTALLED_APPS: elenca nomi di tutte le applicazioni che sono attivate in questa instanza di Django.
+Alcune di queste applicazioni utilizzano almeno una tabella nel database, quindi dobbiamo creare le tabelle nel database prima di poterle utilizzare. 
+
+- creare tutte le tabelle del database necessarie || python manage.py migrate 
+
+# CREARE I MODELLI - (struttura del database, con metadati aggiuntivi)
+Un modello è la sorgente di informazione singola e definitiva sui dati: il piano è definire il data model in un unico posto e derivare automaticamente altre cose da quello.
+I modelli sono rappresentati da classi Python, sottoclassi di django.db.models.Model
+
+- inserire i nuovi modelli in polls/models.py || class Question(models.Model): [...]
+ad esempio: 
+
+                                        class Question(models.Model):
+                                            question_text = models.CharField(max_length=200)
+                                            pub_date = models.DateTimeField('date published')
+
+
+                                        class Choice(models.Model):
+                                            question = models.ForeignKey(Question, on_delete=models.CASCADE)
+                                            choice_text = models.CharField(max_length=200)
+                                            votes = models.IntegerField(default=0)
+
+Ogni modello ha un certo numero di variabili di classe, ciascuna delle quali rappresenta un campo del database.
+Ogni campo è rappresentato da un’istanza della classe Field.
+
+- aggiungere l'app nella lista INSTALLED_APPS su settings.py || Le classe PollsConfig è nel file polls/apps.py --> percorso: 'polls.apps.PollsConfig'
+- abbiamo modificato INSTALLED_APPS: rilanciare le migrations || python manage.py makemigrations polls
+
+#??? (non ho capito questa parte)
+-python manage.py sqlmigrate polls 0001
+-python manage.py migrate
+
+# USARE LE API
+
+- chiamare la shell interattiva || python manage.py shell
+- esplorare le API del database
+
+        importare le classi dei modelli || from polls.models import Choice, Question
+        vedere gli oggetti Question nel db || Question.objects.all()
+
+        in Django, si usa timezone invece di datetime || from django.utils import timezone
+        creare una nuova Question || q = Question(question_text="What's new?", pub_date=timezone.now())
+
+        salvare l'oggetto nel DB || q.save()
+        adesso l'oggetto ha un id || q.id
+
+        vedere gli attributi dell'oggetto || q.question_text
+        vedere gli attributi dell'oggetto || q.pub_date
+
+        si possono cambiare gli attributi direttamente || q.question_text = "What's up?"
+        q.save()
+
+        Question.objects.all()
+
+- conviene inserire un metodo __str__() nei modelli per stampare una rappresentazione
+  significativa delle classi || su polls/models.py
+- si possono anche aggiungere metodi personalizzati, se servono || def was_published_recently(self): [...] (nella classe Question)
+
+# AMMINISTRAZIONE DI DJANGO
+Generare e gestire un sito di amministrazione in cui admin/staff/utenti possono
+aggiungere/modificare/cancellare contenuti
+In Django c'è una separazione netta tra "editori di contenuti" e "utenti pubblici"
+L'amministratore non è concepito per essere utilizzato dai visitatori del sito: è per coloro che gestiscono il sito.
+
+- Creare un utente amministratore || python manage.py createsuperuser
+    (verranno chiesti username, mail e password)
+
+- andare nel sito di amministrazione || python manage.py runserver, poi andare su http://127.0.0.1:8000/admin/
+
+- dire all'admin che gli oggetti Question hanno un'interfaccia di amministrazione || su polls/admin.py aggiungere:
+
+                                        from .models import Question
+                                        admin.site.register(Question)
+
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# RECAP
+Una view è un «tipo» di pagina web nella tua applicazione Django, che generalmente serve una specifica funzione ed ha un template specifico.
+In Django, le pagine web e gli altri contenuti sono serviti dalle views. 
+Ogni view è rappresentata da una funzione Python (o un metodo, in caso di views basate su classi). 
+Django sceglierà una view esaminando la URL che viene richiesta (per essere precisi, la parte di URL dopo il nome di dominio).
+
+Django permette di utilizzare pattern per le URL: un pattern URL è la forma generale di una URL - per esempio: /newsarchive/<year>/<month>/.
+Per prendere una URL da una view, Django usa quelle che sono chiamate “URLconfs”. Una URLconf mappa i pattern delle URL sulle view.
+
+
+# SCRIVERE VISUALIZZAZIONI CON ARGOMENTI 
+- si aggiungono a polls/views.py
+esempio:
+
+                def detail(request, question_id):
+                    return HttpResponse("You're looking at question %s." % question_id)
+
+- ricordarsi di collegare le nuove view nel modulo polls.urls con le chiamate path() corrispondenti!
+  verranno usati i pattern URL; ad esempio:
+
+                urlpatterns = [
+                    # ex: /polls/
+                    path('', views.index, name='index'),
+                    # ex: /polls/5/
+                    path('<int:question_id>/', views.detail, name='detail'),
+                    # ex: /polls/5/results/
+                    path('<int:question_id>/results/', views.results, name='results'),
+                    # ex: /polls/5/vote/
+                    path('<int:question_id>/vote/', views.vote, name='vote'),
+                ]
+
+
+Quando è chiamata la pagina /polls/34/ del sito web:
+- Django scorre i pattern in urlpatterns (mysite/urls.py)
+- Se trova un match con 'polls/', toglie 'polls/' ed invia la parte rimanente
+  del testo ('34/') alla URLconf polls/urls.py
+- dentro polls/urls.py, '34/' combacia con '<int:question_id>/': è chiamata la view corrispondente (detail(), in questo caso)
+- <int:question_id> dice che alla view corrispondente è passato question_id=34
+
+L'uso delle parentesi angolari «cattura» parte della URL e la invia come argomento keyword alla funzione della view. 
+
+# SCRIVERE VISUALIZZAZIONI CHE FANNO QUALCOSA
+Ogni view fa una tra due cose:
+    - restituisce un oggetto HttpResponse con il contenuto della pagina richiesta
+    - solleva una eccezione come Http404
+
+Una view può:
+    - leggere dati dal DB;
+    - usare il sistema di template di Django, o uno esterno;
+    - generare file PDF, XML, ZIP, ecc...;
+    - usare qualsiasi libreria Python.
+
+Il design di una pagina web è codificato nella view: per
+cambiare il modo in cui una pagina appare, è necessario
+modificare il codice Python corrispondente.
+
+- creare una cartella templates/ dentro polls/
+- creare un'altra cartella polls/ dentro polls/templates/
+- creare un file index.html dentro polls/templates/polls/
+
+Questo file html conterrà il layout della pagina
+Sarà necessario usare file HTML completi 
+
+                   https://developer.mozilla.org/en-US/docs/Learn/HTML/Introduction_to_HTML/Getting_started#anatomy_of_an_html_document
+
+
+Per usare questo template, lo si passa alla vista (in polls/views.py)
+
+Una scorciatoia: La funzione render() prende l’oggetto request come 
+primo argomento, un nome di template come secondo argomento ed un 
+dizionario come terzo argomento opzionale. 
+Restituisce un oggetto HttpResponse del template dato reso 
+con il contesto dato. Un esempio:
+
+            def index(request):
+                latest_question_list = Question.objects.order_by('-pub_date')[:5]
+                context = {'latest_question_list': latest_question_list}
+                return render(request, 'polls/index.html', context)
+
+
+# GENERARE UN ERRORE 404
+
+- gli errori 404 possono essere chiamati come Python exception:
+
+from django.http import Http404
+
+[..code..]
+raise Http404("Error message")
+[..code..]
+
+Scorciatoia: La funzione get_object_or_404() prende un modello 
+Django come primo argomento e un numero arbitrario di argomenti 
+keyword, che passa alla funzione get() del manager del modello. 
+Solleva Http404 se l’oggetto non esiste.
+Una funzione simile per le liste: get_list_or_404() 
+
+# UTILIZZARE IL SISTEMA DI TEMPLATE
+
+https://docs.djangoproject.com/it/4.0/topics/templates/
+
+# RIMUOVERE LE URL CODIFICATE NEI TEMPLATE
+
+Contesto: quando abbiamo scritto il link ad una domanda nel template 
+polls/index.html, il link era parzialmente hardcodato come:
+
+            <li><a href="/polls/{{ question.id }}/">{{ question.question_text }}</a></li>
+
+
+Però così è difficile cambiare URL su progetti con molti template.
+Comunque, dal momento che hai definito l’argomento nome nelle 
+funzioni path() nel modulo polls.urls, puoi rimuovere la dipendenza 
+da percorsi URL specifici definiti nelle tue configurazioni url 
+usando il tag di template {% url %}:
+
+            <li><a href="{% url 'detail' question.id %}">{{ question.question_text }}</a></li>
+
+Il modo in cui funziona è ricercando la definizione della URL così come è definita nel modulo polls.urls
+
+# ASSEGNAZIONE DELLO SPAZIO DEI NOMI ALLE URL
+
+Nei veri progetti Django, ci possono essere cinque, dieci, venti app 
+o anche più. Come fa Django a differenziare i nomi delle URL tra 
+di esse? Per esempio, l’app polls ha una view detail, e così 
+potrebbe averla una app sullo stesso progetto che serve per un blog.
+
+Come si a fare in modo che Django sappia quale view di quale app 
+creare da un url quando si usa il tag di template {% url %}?
+
+- Aggiungere namespaces all' URLconf || Nel file polls/urls.py, procedi ed inserisci un app_name per impostare il namespace della applicazione.
+
+- Cambiare il template polls/index.html per puntare al namespace detail della vista
+
+Da:
+
+            <li><a href="{% url 'detail' question.id %}">{{ question.question_text }}</a></li>
+
+A:
+
+            <li><a href="{% url 'polls:detail' question.id %}">{{ question.question_text }}</a></li>
+
+( Cioè 'detail' --> 'polls:detail' )
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# SCRIVERE UN MODULO MINIMALE
+
+- aggiornare il template polls/detail.html
+- creare una view Django che gestisce ed elabora i dati in submit (dentro polls/views.py)
+    -aggiungere def vote(request, question_id)
+    -aggiungere def results(request, question_id)
+- aggiungere il template polls/results.html
+
+NB: per risolvere il problema di "race condition", visitare:
+
+    https://docs.djangoproject.com/it/4.0/ref/models/expressions/#avoiding-race-conditions-using-f
+
+# USARE VISTE GENERICHE (meno codice=meglio!)
+
+
+Django fornisce view generiche: astrazione di pattern comuni. 
+alcuni esempi:
+    - prendere dei dati dal database in accordo con un parametro passato via URL
+    - caricare un template
+    - restituire il template per il rendering
+
+Per passare da view specifiche a view generiche, sono necessari tre passaggi:
+
+    - Convertire la URLconf || polls/urls.py
+    - Cancellare le viste specifiche || polls/views.py
+    - Introdurre le corrispondenti viste generiche di Django || polls/views.py
+
+Esempi di liste generiche:
+
+    - Listview || «mostrare una lista di oggetti»
+    - DetailView || mostrare una pagina di dettaglio per un particolare tipo di oggetto»
+
+Ogni view generica ha bisogno di sapere su che modello agirà. 
+Questa cosa viene definita con l’attributo model.
+
+La view generica DetailView si aspetta che la chiave primaria 
+che viene catturata dalla URL si chiami "pk", quindi abbiamo 
+cambiato question_id in pk per le view generiche (in polls/urls.py)
+
+    path('<int:pk>/', views.DetailView.as_view(), name='detail')
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# TEST AUTOMATICI (routine che controllano il buon funzionamento del codice)
+
+- identificare un bug
+- creare un test automatizzato per esporre un bug || vi è già il file polls/tests.py che conterrà i test
+- eseguire i test || python manage.py test polls
+
+Quando si eseguono i test, viene creato un database speciale con lo 
+scopo di testing, che non modifica quello principale
+
+- correggere il bug || su polls/models.py
+
+# TESTARE UNA VISTA
+Django offre una Client di test per simulare un utente 
+che interagisce con il codice a livello della view. 
+Possiamo usarla in tests.py o persino nella shell.
+
+Per la shell:
+    - python manage.py shell
+    - from django.test.utils import setup_test_environment
+    - setup_test_environment()
+    - from django.test import Client
+    - client = Client()
+
+Buone regole per scrivere test:
+
+- Avere una TestClass separata per ogni model o view
+- Avere un metodo test separato per ogni set di condizioni che tu vuoi testare
+- Avere nomi di metodi di test che descrivono la loro funzione
+
+--> Tool come Selenium permettono di controllare il modo in cui 
+    il codice HTML viene mostrato nel browser.
+
+--> Django include LiveServerTestCase per facilitare l’integrazione
+    con tool come Selenium.
+
+Per approfondimenti sui test:
+
+        https://docs.djangoproject.com/it/4.0/topics/testing/
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+Insieme all’HTML generato dal server, le applicazioni web di solito hanno 
+bisogno di servire altri file – come immagini, JavaScript, o CSS – 
+necessari per generare la pagina web in completo. 
+In Django, ci riferiamo a questi file chiamandoli «file statici».
+
+--> django.contrib.staticfiles :
+
+colleziona file statici da ogni applicazione (e da ogni altro 
+posto che specifichi) in una singola destinazione che può essere 
+facilmente servita in produzione.
+
+
+# PERSONALIZZARE ASPETTO E DESIGN DI UN'applicazione
+
+- creare una directory static/ dentro polls/
+
+L’impostazione STATICFILES_FINDERS di Django contiene una lista 
+di «cercatori» che sanno come trovare i file statici da diverse 
+fonti: uno dei predefiniti è AppDirectoriesFinder, che cerca in 
+una sottodirectory chiamata «static» per ciascuna delle app 
+inserite in INSTALLED_APP, come la cartella appena creata.
+
+- dentro static/ creare un'altra directory polls/
+- dentro static/polls/ creare un file style.css
+- riempire style.css
+
+                li a {
+                    color: green;
+                }
+
+
+- aggiungere all’inizio di polls/templates/polls/index.html :
+
+                {% load static %}
+
+                <link rel="stylesheet" type="text/css" href="{% static 'polls/style.css' %}">
+
+
+Il template tag {% static %} genera l’URL assoluto dei file statici.
+
+# AGGIUNGERE UN'IMMAGINE DI SFONDO
+
+- dentro polls/static/polls/ creare una directory images/
+- dentro polls/static/polls/images/ mettere un'immagine background.gif
+
+-dentro polls/static/polls/style.css, aggiungere:
+
+                body {
+                    background: white url("images/background.gif") no-repeat;
+                }
+
+Adesso l'immagine è comparsa su http://localhost:8000/polls/
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+# PERSONALIZZARE IL MODULO DI AMMINISTRAZIONE
+
+Registrando il modello Question con admin.site.register(Question), 
+Django è stato in grado di costruire un form di default.
+
+- per cambiarlo, in polls/admin.py è necessario cambiare
+
+                admin.site.register(Question)
+
+con
+
+                class QuestionAdmin(admin.ModelAdmin):
+                    fields = ['pub_date', 'question_text']
+
+                admin.site.register(Question, QuestionAdmin)
+
+
+In generale, per cambiare le opzioni nel pannello di amministrazione 
+del modello, è necessario:
+    - creare una classe del modello di amministrazione
+    - passarla come secondo argomento ad admin.site.register()
+
+Per dividere un modulo in gruppi di campi, si usa fieldsets:
+
+                class QuestionAdmin(admin.ModelAdmin):
+                    fieldsets = [
+                        (None,               {'fields': ['question_text']}),
+                        ('Date information', {'fields': ['pub_date']}),
+                    ]
+
+Il primo elemento di ogni tupla in fieldsets è il titolo del fieldset. 
+
+# AGGIUNGERE OGGETTI CORRELATI
+
+Abbiamo la nostra pagina di amministrazione del modello Question, 
+ma una Question ha più Choice, e il pannello di amministrazione non 
+mostra le scelte. Per risolvere ciò, ci sono due strade:
+
+1) Registrare Choice nell'amministrazione, come è stato fatto per Question:
+- su polls/admin.py || admin.site.register(Choice)
+
+2) Aggiungere un gruppo di Choices direttamente quando crei l’oggetto Question:
+- rimuovere admin.site.register(Choice) su polls/admin.py 
+- aggiornare la classe QuestionAdmin(admin.ModelAdmin) in polls/admin.py 
+
+Questo dice a Django: gli oggetti <<Choice>> sono modificati 
+nella pagina di amministrazione del modello Question. 
+Di default, fornisce abbastanza campi per 3 scelte.
+
+# PERSONALIZZARE LA LISTA PER MODIFICA DI INTERFACCIA AMMINISTRAZIONE
+Di default, Django mostra la str() di ogni oggetto. Qualche volta però 
+può essere più utile se potessimo mostrare campi individuali.
+Per fare ciò:
+- usa l’opzione di amministrazione list_display su polls/admin.py :
+
+                class QuestionAdmin(admin.ModelAdmin):
+                    # ...
+                    list_display = ('question_text', 'pub_date', 'was_published_recently')
+
+- si può anche aggiungere una sidebar "Filtra":
+
+                    list_filter = ['pub_date']
+
+- ed una di "Ricerca":
+
+                    search_fields = ['question_text']
+
+
+# PERSONALIZZARE L'ASPETTO DELL'AMMINISTRAZIONE
+
+- Personalizzare il template del progetto:
+    - creare una directory templates/ dentro la directory principale
+      (quella che contiene manage.py)
+    - su mysite/settings.py, aggiungere un’opzione DIRS nell’impostazione TEMPLATES:
+                'DIRS': [] ---> 'DIRS': [BASE_DIR / 'templates']
+    - su templates/ creare una directory admin/
+    - su templates/admin/ copiare il modello admin/base_site.html
+      dalla directory predefinita dei modelli di amministrazione 
+      di Django nel codice sorgente di Django stesso 
+      (django/contrib/admin/templates) in quella directory.
+        - Se hai difficoltà a trovare dove si trovano i file sorgente di Django sul tuo sistema, esegui il seguente comando:
+                    $ python -c "import django; print(django.__path__)"
+
+    - modifica base_site.html sostituendo 
+                    {{ site_header|default:_('Django administration') }}
+      con il nome del sito, ad es. con
+                        Polls Administration
+
+NB: Qualsiasi template di default di Django può essere sovrascritto/customizzato in questo modo.
+
+
+# ALTRI ARGOMENTI
+    - Personalizzare i template dell'applicazione
+    - Personalizzare l’indice dell’amministrazione
+    - Cosa leggere dopo || https://docs.djangoproject.com/it/4.0/intro/whatsnext/
+    - Tutorial avanzato: Come scrivere applicazioni riutilizzabili || https://docs.djangoproject.com/it/4.0/intro/reusable-apps/
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+                                    <---  THE END --->
+
+################################################################################################
+################################################################################################
+################################################################################################
+
